@@ -9,14 +9,22 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@e2b/code-interpreter": "^2.3.3",
     "@langchain/core": "^1.1.22",
     "@langchain/openai": "^1.2.7",
+    "@tailwindcss/typography": "^0.5.19",
     "ai": "^6.0.81",
+    "katex": "^0.16.28",
     "langchain": "^1.2.21",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "rehype-katex": "^7.0.1",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

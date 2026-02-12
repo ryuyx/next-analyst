@@ -4,24 +4,40 @@ import { useRef, useEffect } from "react";
 import type { Message } from "../hooks/useChat";
 import { ConfirmationCard } from "./ConfirmationCard";
 import { ToolCallCard } from "./ToolCallCard";
+import { CodeResultCard } from "./CodeResultCard";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import remarkBreaks from "remark-breaks";
+import rehypeKatex from "rehype-katex";
+import rehypeHighlight from "rehype-highlight";
 
 interface ChatMessagesProps {
   messages: Message[];
   onConfirm: (action: string) => void;
   onReject: (action: string) => void;
+  onApproveToolCall: (messageId: string, toolCallIndex: number) => void;
+  onRejectToolCall: (messageId: string, toolCallIndex: number) => void;
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
 export function ChatMessages({
   messages,
   onConfirm,
   onReject,
+  onApproveToolCall,
+  onRejectToolCall,
+  onSuggestionClick,
 }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Plugin configuration for ReactMarkdown
+  const remarkPlugins = [remarkGfm, remarkMath, remarkBreaks];
+  const rehypePlugins = [rehypeKatex, rehypeHighlight];
 
   if (messages.length === 0) {
     return (
@@ -38,7 +54,8 @@ export function ChatMessages({
           ].map((suggestion) => (
             <button
               key={suggestion}
-              className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
+              onClick={() => onSuggestionClick?.(suggestion)}
+              className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm text-zinc-600 transition-all hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-sm"
             >
               {suggestion}
             </button>
@@ -61,34 +78,128 @@ export function ChatMessages({
             <div
               className={`max-w-[85%] ${
                 message.role === "user"
-                  ? "rounded-2xl rounded-br-md bg-blue-600 px-4 py-3 text-white"
-                  : "rounded-2xl rounded-bl-md bg-zinc-100 px-4 py-3 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200"
+                  ? "rounded-2xl rounded-br-sm bg-indigo-600 px-5 py-3.5 text-white shadow-md"
+                  : "rounded-2xl rounded-bl-sm border border-zinc-200 bg-white px-5 py-3.5 text-zinc-800 shadow-sm"
               }`}
             >
-              {/* Tool calls */}
-              {message.toolCalls?.map((tc, i) =>
-                tc.tool === "confirm_action" ? (
-                  <ConfirmationCard
-                    key={i}
-                    toolCall={tc}
-                    onConfirm={onConfirm}
-                    onReject={onReject}
-                  />
-                ) : (
-                  <ToolCallCard key={i} toolCall={tc} />
-                )
-              )}
-
-              {/* Message content */}
-              {message.content && (
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <ReactMarkdown>{message.content}</ReactMarkdown>
+              {/* File attachments */}
+              {message.files && message.files.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {message.files.map((file) => (
+                    <div
+                      key={file.id}
+                      className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${
+                        message.role === "user"
+                          ? "bg-white/20 text-white"
+                          : "bg-zinc-100 text-zinc-600"
+                      }`}
+                    >
+                      <span>📄</span>
+                      <span>{file.name}</span>
+                    </div>
+                  ))}
                 </div>
               )}
 
+              {/* Message content (Parts based or legacy fallback) */}
+              {message.parts && message.parts.length > 0 ? (
+                (() => {
+                  let toolCallIndex = 0;
+                  return message.parts.map((part, index) => {
+                    if (part.type === "text" && part.text) {
+                      return (
+                        <div
+                          key={index}
+                          className={`prose prose-sm max-w-none mb-2 last:mb-0 text-wrap break-words ${
+                            message.role === "user" ? "prose-invert text-white" : ""
+                          }`}
+                        >
+                          <ReactMarkdown
+                            remarkPlugins={remarkPlugins}
+                            rehypePlugins={rehypePlugins}
+                          >
+                            {part.text}
+                          </ReactMarkdown>
+                        </div>
+                      );
+                    }
+                    if (part.type === "tool_call" && part.toolCall) {
+                      const tc = part.toolCall;
+                      const currentIndex = toolCallIndex++;
+                      
+                      if (tc.tool === "confirm_action") {
+                        return (
+                          <ConfirmationCard
+                            key={index}
+                            toolCall={tc}
+                            onConfirm={onConfirm}
+                            onReject={onReject}
+                          />
+                        );
+                      }
+                      if (tc.tool === "execute_python") {
+                        return (
+                          <CodeResultCard
+                            key={index}
+                            toolCall={tc}
+                            onApprove={() =>
+                              onApproveToolCall(message.id, currentIndex)
+                            }
+                            onReject={() =>
+                              onRejectToolCall(message.id, currentIndex)
+                            }
+                          />
+                        );
+                      }
+                      return <ToolCallCard key={index} toolCall={tc} />;
+                    }
+                    return null;
+                  });
+                })()
+              ) : (
+                <>
+                  {/* Legacy rendering for messages without parts */}
+                  {message.content && (
+                    <div
+                      className={`prose prose-sm max-w-none text-wrap break-words ${
+                        message.role === "user" ? "prose-invert text-white" : ""
+                      }`}
+                    >
+                      <ReactMarkdown
+                        remarkPlugins={remarkPlugins}
+                        rehypePlugins={rehypePlugins}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+
+                  {/* Tool calls */}
+                  {message.toolCalls?.map((tc, i) =>
+                    tc.tool === "confirm_action" ? (
+                      <ConfirmationCard
+                        key={i}
+                        toolCall={tc}
+                        onConfirm={onConfirm}
+                        onReject={onReject}
+                      />
+                    ) : tc.tool === "execute_python" ? (
+                      <CodeResultCard
+                        key={i}
+                        toolCall={tc}
+                        onApprove={() => onApproveToolCall(message.id, i)}
+                        onReject={() => onRejectToolCall(message.id, i)}
+                      />
+                    ) : (
+                      <ToolCallCard key={i} toolCall={tc} />
+                    )
+                  )}
+                </>
+              )}
+
               {/* Streaming indicator */}
-              {message.isStreaming && !message.content && (
-                <div className="flex items-center gap-1.5">
+              {message.isStreaming && (
+                <div className="flex items-center gap-1.5 mt-2">
                   <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]" />
                   <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]" />
                   <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400" />
