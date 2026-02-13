@@ -62,10 +62,32 @@ export function ChatMessages({
   onSuggestionClick,
 }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
+  // Check if user is near bottom
+  const isNearBottom = () => {
+    if (!containerRef.current) return true;
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    // Consider "near bottom" if within 100px of the bottom
+    return scrollHeight - scrollTop - clientHeight < 100;
+  };
+
+  // Auto-scroll to bottom when messages change, but only if user is near bottom
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (shouldAutoScroll && isNearBottom()) {
+      const timer = setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [messages, shouldAutoScroll]);
+
+  // Detect user scrolling away from bottom
+  const handleScroll = () => {
+    const nearBottom = isNearBottom();
+    setShouldAutoScroll(nearBottom);
+  };
 
   // Plugin configuration for ReactMarkdown
   const remarkPlugins = [remarkGfm, remarkMath, remarkBreaks];
@@ -117,7 +139,12 @@ export function ChatMessages({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6">
+    <div
+      ref={containerRef}
+      className="flex-1 overflow-y-scroll px-4 py-6"
+      style={{ scrollbarGutter: "stable" }}
+      onScroll={handleScroll}
+    >
       <div className="mx-auto max-w-3xl space-y-6">
         {messages.map((message) => (
           <div
@@ -161,7 +188,7 @@ export function ChatMessages({
                       return (
                         <div
                           key={index}
-                          className={`prose prose-sm max-w-none mb-2 last:mb-0 text-wrap break-words ${
+                          className={`prose prose-sm max-w-none mb-2 last:mb-0 text-wrap wrap-break-words ${
                             message.role === "user" ? "prose-invert text-white" : ""
                           }`}
                         >
@@ -213,7 +240,7 @@ export function ChatMessages({
                   {/* Legacy rendering for messages without parts */}
                   {message.content && (
                     <div
-                      className={`prose prose-sm max-w-none text-wrap break-words ${
+                      className={`prose prose-sm max-w-none text-wrap wrap-break-words ${
                         message.role === "user" ? "prose-invert text-white" : ""
                       }`}
                     >

@@ -4,7 +4,7 @@
       "id": "iot-1",
       "category": "Manufacturing IoT",
       "dataset": "/examples/manufacturing_iot_dataset.csv",
-      "question": "Analyze the manufacturing_iot_dataset.csv and create visualizations showing the relationship between temperature, vibration, and alarm status over time.",
+      "question": "分析 manufacturing_iot_dataset.csv 并创建可视化图表，显示温度、振动和报警状态随时间的变化关系。",
       "icon": "📊",
       "description": "Explore sensor patterns and anomalies"
     },
@@ -12,7 +12,7 @@
       "id": "iot-2",
       "category": "Manufacturing IoT",
       "dataset": "/examples/manufacturing_iot_dataset.csv",
-      "question": "Find correlations between equipment parameters (temperature, pressure, vibration, current) and production quality in the manufacturing dataset.",
+      "question": "在制造数据集中找到设备参数（温度、压力、振动、电流）与生产质量之间的相关性。",
       "icon": "🔍",
       "description": "Discover quality factors"
     },
@@ -20,7 +20,7 @@
       "id": "iot-3",
       "category": "Manufacturing IoT",
       "dataset": "/examples/manufacturing_iot_dataset.csv",
-      "question": "Identify when alarms are triggered in the manufacturing data and what conditions lead to them. Show me a timeline visualization.",
+      "question": "识别制造数据中何时触发报警以及导致报警的条件。显示时间线可视化。",
       "icon": "⚠️",
       "description": "Analyze alarm patterns"
     },
@@ -28,7 +28,7 @@
       "id": "movies-1",
       "category": "Movies Analysis",
       "dataset": "/examples/tmdb_10000_movies_dataset.csv",
-      "question": "Analyze the tmdb_10000_movies_dataset.csv and show me the top 20 highest-rated movies with at least 1000 votes. Create a visualization.",
+      "question": "分析 tmdb_10000_movies_dataset.csv 并显示至少有1000票的评分最高的20部电影。创建可视化。",
       "icon": "🎬",
       "description": "Find top-rated movies"
     },
@@ -36,7 +36,7 @@
       "id": "movies-2",
       "category": "Movies Analysis",
       "dataset": "/examples/tmdb_10000_movies_dataset.csv",
-      "question": "Show me trends in movie ratings and popularity over the years. Which decades produced the best movies?",
+      "question": "进行数据清洗，显示电影评分和流行度随年份的变化趋势。哪个十年产生了最好的电影？",
       "icon": "📈",
       "description": "Explore rating trends"
     },
@@ -44,7 +44,7 @@
       "id": "movies-3",
       "category": "Movies Analysis",
       "dataset": "/examples/tmdb_10000_movies_dataset.csv",
-      "question": "Analyze the distribution of movies by language and show which languages have the highest average ratings.",
+      "question": "分析电影按语言的分布，并显示哪些语言的平均评分最高。",
       "icon": "🌍",
       "description": "Language analysis"
     },
@@ -52,7 +52,7 @@
       "id": "general-1",
       "category": "Getting Started",
       "dataset": null,
-      "question": "What can you help me with? Show me your data analysis capabilities.",
+      "question": "你能帮我做什么？展示你的数据分析能力。",
       "icon": "💡",
       "description": "Learn about features"
     }

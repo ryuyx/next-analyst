@@ -161,7 +161,7 @@ export function ChatInput({
               ) : (
                 <span>📄</span>
               )}
-              <span className="max-w-[150px] truncate">{file.name}</span>
+              <span className=" max-w-[150px]truncate">{file.name}</span>
               {file.previewError ? (
                 <span className="text-red-600 dark:text-red-400 text-xs">预览失败</span>
               ) : file.isPreviewing ? (

@@ -495,7 +495,7 @@ export function CodeResultCard({ toolCall, onApprove, onReject }: CodeResultCard
                 </span>
               </div>
               <div className="overflow-x-auto rounded-lg bg-red-50 p-3 text-xs text-red-700 border border-red-200">
-                <pre className="whitespace-pre-wrap break-words font-mono">{error}</pre>
+                <pre className="whitespace-pre-wrap wrap-break-words font-mono">{error}</pre>
               </div>
             </div>
           )}
