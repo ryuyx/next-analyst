@@ -1,0 +1,60 @@
+{
+  "questions": [
+    {
+      "id": "iot-1",
+      "category": "Manufacturing IoT",
+      "dataset": "/examples/manufacturing_iot_dataset.csv",
+      "question": "Analyze the manufacturing_iot_dataset.csv and create visualizations showing the relationship between temperature, vibration, and alarm status over time.",
+      "icon": "📊",
+      "description": "Explore sensor patterns and anomalies"
+    },
+    {
+      "id": "iot-2",
+      "category": "Manufacturing IoT",
+      "dataset": "/examples/manufacturing_iot_dataset.csv",
+      "question": "Find correlations between equipment parameters (temperature, pressure, vibration, current) and production quality in the manufacturing dataset.",
+      "icon": "🔍",
+      "description": "Discover quality factors"
+    },
+    {
+      "id": "iot-3",
+      "category": "Manufacturing IoT",
+      "dataset": "/examples/manufacturing_iot_dataset.csv",
+      "question": "Identify when alarms are triggered in the manufacturing data and what conditions lead to them. Show me a timeline visualization.",
+      "icon": "⚠️",
+      "description": "Analyze alarm patterns"
+    },
+    {
+      "id": "movies-1",
+      "category": "Movies Analysis",
+      "dataset": "/examples/tmdb_10000_movies_dataset.csv",
+      "question": "Analyze the tmdb_10000_movies_dataset.csv and show me the top 20 highest-rated movies with at least 1000 votes. Create a visualization.",
+      "icon": "🎬",
+      "description": "Find top-rated movies"
+    },
+    {
+      "id": "movies-2",
+      "category": "Movies Analysis",
+      "dataset": "/examples/tmdb_10000_movies_dataset.csv",
+      "question": "Show me trends in movie ratings and popularity over the years. Which decades produced the best movies?",
+      "icon": "📈",
+      "description": "Explore rating trends"
+    },
+    {
+      "id": "movies-3",
+      "category": "Movies Analysis",
+      "dataset": "/examples/tmdb_10000_movies_dataset.csv",
+      "question": "Analyze the distribution of movies by language and show which languages have the highest average ratings.",
+      "icon": "🌍",
+      "description": "Language analysis"
+    },
+    {
+      "id": "general-1",
+      "category": "Getting Started",
+      "dataset": null,
+      "question": "What can you help me with? Show me your data analysis capabilities.",
+      "icon": "💡",
+      "description": "Learn about features"
+    }
+  ]
+}

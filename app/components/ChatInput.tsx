@@ -46,6 +46,8 @@ interface ChatInputProps {
   pendingFiles: FileAttachment[];
   onAddFiles: (files: FileAttachment[]) => void;
   onRemoveFile: (id: string) => void;
+  input: string;
+  onInputChange: (value: string) => void;
 }
 
 export function ChatInput({
@@ -55,8 +57,9 @@ export function ChatInput({
   pendingFiles,
   onAddFiles,
   onRemoveFile,
+  input,
+  onInputChange,
 }: ChatInputProps) {
-  const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,7 +120,7 @@ export function ChatInput({
     const anyPreviewing = pendingFiles.some((f) => f.isPreviewing);
     if ((!input.trim() && !hasFiles) || isLoading || anyPreviewing) return;
     onSend(input.trim() || "请分析上传的文件");
-    setInput("");
+    onInputChange("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -222,7 +225,7 @@ export function ChatInput({
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="输入消息... (Shift+Enter 换行)"
             rows={1}

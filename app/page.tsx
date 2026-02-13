@@ -3,6 +3,7 @@
 import { useChat } from "./hooks/useChat";
 import { ChatMessages } from "./components/ChatMessages";
 import { ChatInput } from "./components/ChatInput";
+import { SampleQuestions } from "./components/SampleQuestions";
 import { useState } from "react";
 
 function exportChatAsMarkdown(messages: any[]): string {
@@ -26,6 +27,14 @@ function exportChatAsMarkdown(messages: any[]): string {
 export default function Home() {
   const { messages, isLoading, isPreviewingFiles, sendMessage, clearMessages, approveToolCall, rejectToolCall, pendingFiles, addFiles, removeFile } = useChat();
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+
+  const handleQuestionSelect = (question: string, file?: any) => {
+    setInputValue(question);
+    if (file) {
+      addFiles([file]);
+    }
+  };
 
   const handleConfirm = (action: string) => {
     sendMessage(`我确认执行操作: ${action}`);
@@ -96,15 +105,21 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Messages */}
-      <ChatMessages
-        messages={messages}
-        onConfirm={handleConfirm}
-        onReject={handleReject}
-        onApproveToolCall={approveToolCall}
-        onRejectToolCall={rejectToolCall}
-        onSuggestionClick={sendMessage}
-      />
+      {/* Messages or Sample Questions */}
+      {messages.length === 0 ? (
+        <div className="flex-1 overflow-y-auto">
+          <SampleQuestions onQuestionSelect={handleQuestionSelect} />
+        </div>
+      ) : (
+        <ChatMessages
+          messages={messages}
+          onConfirm={handleConfirm}
+          onReject={handleReject}
+          onApproveToolCall={approveToolCall}
+          onRejectToolCall={rejectToolCall}
+          onSuggestionClick={sendMessage}
+        />
+      )}
 
       {/* Input */}
       <ChatInput
@@ -114,6 +129,8 @@ export default function Home() {
         pendingFiles={pendingFiles}
         onAddFiles={addFiles}
         onRemoveFile={removeFile}
+        input={inputValue}
+        onInputChange={setInputValue}
       />
     </div>
   );
