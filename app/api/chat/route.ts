@@ -1,5 +1,5 @@
 ﻿import { AIMessage } from "@langchain/core/messages";
-import { createGraph, buildLangChainMessages } from "./agent";
+import { createGraph, buildLangChainMessages, type FileInfo } from "./agent";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -101,10 +101,10 @@ export async function POST(req: Request) {
 
   const graph = createGraph();
   const langchainMessages = buildLangChainMessages(
-    messages,
-    files,
-    toolResult,
-    sessionFiles
+    messages as Array<{ role: string; content: string }>,
+    files as FileInfo[] | undefined,
+    toolResult as Record<string, unknown> | undefined,
+    sessionFiles as FileInfo[] | undefined
   );
 
   const encoder = new TextEncoder();
