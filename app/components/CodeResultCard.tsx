@@ -96,9 +96,115 @@ function copyToClipboard(text: string) {
   });
 }
 
+function FilePreview({ file }: { file: GeneratedFile }) {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+  const isImage = ["png", "jpg", "jpeg", "gif", "svg"].includes(ext);
+  const isCSV = ["csv", "tsv"].includes(ext);
+  const isJSON = ext === "json";
+
+  if (isImage) {
+    return (
+      <div className="rounded-lg overflow-hidden bg-white">
+        <img
+          src={`data:image/${ext === "svg" ? "svg+xml" : ext};base64,${file.content}`}
+          alt={file.name}
+          className="max-w-full h-auto"
+        />
+      </div>
+    );
+  }
+
+  if (isCSV || isJSON) {
+    try {
+      let textContent = "";
+
+      // Decode base64 with proper encoding handling
+      try {
+        const binaryString = atob(file.content);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        // Try UTF-8 first
+        textContent = new TextDecoder("utf-8").decode(bytes);
+      } catch {
+        // Fallback to GBK/GB2312 if UTF-8 fails
+        try {
+          const binaryString = atob(file.content);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          textContent = new TextDecoder("gbk").decode(bytes);
+        } catch {
+          textContent = atob(file.content);
+        }
+      }
+
+      let data: any[] = [];
+      let columns: string[] = [];
+
+      if (isCSV) {
+        const lines = textContent.split("\n").slice(0, 11);
+        if (lines.length > 0) {
+          columns = lines[0].split(",").map((c) => c.trim());
+          data = lines.slice(1).filter(line => line.trim()).map((line) =>
+            line.split(",").reduce((obj, val, idx) => {
+              obj[columns[idx] || `col_${idx}`] = val.trim();
+              return obj;
+            }, {} as Record<string, string>)
+          );
+        }
+      } else if (isJSON) {
+        const parsed = JSON.parse(textContent);
+        data = Array.isArray(parsed) ? parsed.slice(0, 10) : [parsed];
+        if (data.length > 0) {
+          columns = Object.keys(data[0]);
+        }
+      }
+
+      if (data.length === 0) {
+        return <div className="text-xs text-zinc-500 p-2">文件为空</div>;
+      }
+
+      return (
+        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-zinc-200 bg-zinc-50">
+                {columns.map((col, i) => (
+                  <th key={i} className="px-3 py-2 text-left font-medium text-zinc-700 whitespace-nowrap">
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, i) => (
+                <tr key={i} className="border-b border-zinc-100 hover:bg-zinc-50">
+                  {columns.map((col, j) => (
+                    <td key={j} className="px-3 py-2 text-zinc-600 max-w-xs truncate">
+                      {String(row[col] || "")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    } catch (err) {
+      return <div className="text-xs text-red-500 p-2">预览失败: {err instanceof Error ? err.message : "未知错误"}</div>;
+    }
+  }
+
+  return <div className="text-xs text-zinc-500 p-2">不支持预览此文件类型</div>;
+}
+
 export function CodeResultCard({ toolCall, onApprove, onReject }: CodeResultCardProps) {
   const [showCode, setShowCode] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [expandedFileIndex, setExpandedFileIndex] = useState<number | null>(null);
 
   const { args, result, status } = toolCall;
   const code = (args as { code?: string }).code || "";
@@ -330,26 +436,38 @@ export function CodeResultCard({ toolCall, onApprove, onReject }: CodeResultCard
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
                 生成的文件
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {generatedFiles.map((file, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50/50 px-3 py-2"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm shrink-0">{getFileIcon(file.name)}</span>
-                      <span className="truncate text-xs font-medium text-zinc-700">{file.name}</span>
-                      <span className="shrink-0 text-[10px] text-zinc-400">{formatFileSize(file.size)}</span>
+                  <div key={i} className="rounded-lg border border-zinc-100 bg-zinc-50/50 overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm shrink-0">{getFileIcon(file.name)}</span>
+                        <span className="truncate text-xs font-medium text-zinc-700">{file.name}</span>
+                        <span className="shrink-0 text-[10px] text-zinc-400">{formatFileSize(file.size)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => setExpandedFileIndex(expandedFileIndex === i ? null : i)}
+                          className="flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-zinc-200 hover:text-zinc-800"
+                        >
+                          {expandedFileIndex === i ? "收起" : "预览"}
+                        </button>
+                        <button
+                          onClick={() => downloadBase64File(file.content, file.name, getMimeType(file.name))}
+                          className="flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                        >
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          下载
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => downloadBase64File(file.content, file.name, getMimeType(file.name))}
-                      className="ml-2 flex shrink-0 items-center gap-1 rounded-md bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                    >
-                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      下载
-                    </button>
+                    {expandedFileIndex === i && (
+                      <div className="border-t border-zinc-100 p-3 bg-white">
+                        <FilePreview file={file} />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -38,17 +38,17 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
   };
 
   return (
-    <div className="relative group">
+    <div className="relative group my-2 not-prose">
       <button
         onClick={handleCopy}
-        className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded bg-zinc-700 text-white text-xs hover:bg-zinc-600"
+        className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded bg-zinc-700 text-white text-xs hover:bg-zinc-600 z-10"
         title="Copy code"
       >
         {copied ? "✓ Copied" : "Copy"}
       </button>
-      <pre className="overflow-x-auto rounded-lg bg-zinc-900 p-4 text-sm text-zinc-100">
-        <code>{code}</code>
-      </pre>
+      <div className="overflow-x-auto rounded-lg bg-zinc-900 p-4 text-sm text-zinc-100">
+        <code className="font-mono whitespace-pre">{code}</code>
+      </div>
     </div>
   );
 }
@@ -77,9 +77,10 @@ export function ChatMessages({
       const language = match ? match[1] : "";
       const code = String(children).replace(/\n$/, "");
 
-      if (inline) {
+      // If there's no language class, it's inline code
+      if (!language || inline) {
         return (
-          <code className="bg-zinc-100 px-1.5 py-0.5 rounded text-sm text-red-600 dark:bg-zinc-800 dark:text-red-400" {...props}>
+          <code className="px-1 py-0.5 rounded text-sm font-mono bg-opacity-0 text-zinc-700 dark:text-zinc-300" {...props}>
             {children}
           </code>
         );
