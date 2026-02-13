@@ -341,7 +341,7 @@ export function createGraph() {
     configuration: {
       baseURL: process.env.OPENAI_BASE_URL,
     },
-    model: "qwen3-coder",
+    model: process.env.LLM_MODEL || "qwen3-coder",
     temperature: 0.7,
     streaming: true,
   }).bindTools(allTools);

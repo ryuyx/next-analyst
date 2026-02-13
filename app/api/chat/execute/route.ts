@@ -5,6 +5,7 @@ export const maxDuration = 60;
 
 const MAX_SINGLE_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
 const MAX_TOTAL_FILE_SIZE = 20 * 1024 * 1024; // 20MB total
+const MAX_CODE_LENGTH = 100000; // 100KB of code
 
 export async function POST(req: Request) {
   const { tool, args, files } = await req.json();
@@ -16,6 +17,50 @@ export async function POST(req: Request) {
   const code = args?.code;
   if (!code) {
     return Response.json({ error: "No code provided" }, { status: 400 });
+  }
+
+  if (typeof code !== "string") {
+    return Response.json({ error: "Code must be a string" }, { status: 400 });
+  }
+
+  if (code.length > MAX_CODE_LENGTH) {
+    return Response.json(
+      { error: `Code too long (max ${MAX_CODE_LENGTH / 1024}KB)` },
+      { status: 400 }
+    );
+  }
+
+  if (code.trim().length === 0) {
+    return Response.json({ error: "Code cannot be empty" }, { status: 400 });
+  }
+
+  // Validate files
+  if (files && !Array.isArray(files)) {
+    return Response.json({ error: "Files must be an array" }, { status: 400 });
+  }
+
+  let totalFileSize = 0;
+  if (files && Array.isArray(files)) {
+    for (const file of files) {
+      if (!file.name || !file.content) {
+        return Response.json({ error: "Invalid file format" }, { status: 400 });
+      }
+      const buffer = Buffer.from(file.content, "base64");
+      if (buffer.length > MAX_SINGLE_FILE_SIZE) {
+        return Response.json(
+          { error: `File ${file.name} too large (max ${MAX_SINGLE_FILE_SIZE / 1024 / 1024}MB)` },
+          { status: 400 }
+        );
+      }
+      totalFileSize += buffer.length;
+    }
+  }
+
+  if (totalFileSize > MAX_TOTAL_FILE_SIZE) {
+    return Response.json(
+      { error: `Total file size too large (max ${MAX_TOTAL_FILE_SIZE / 1024 / 1024}MB)` },
+      { status: 400 }
+    );
   }
 
   let sandbox: Sandbox | null = null;

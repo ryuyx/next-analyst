@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import type { Message } from "../hooks/useChat";
 import { ConfirmationCard } from "./ConfirmationCard";
 import { ToolCallCard } from "./ToolCallCard";
@@ -21,6 +21,38 @@ interface ChatMessagesProps {
   onSuggestionClick?: (suggestion: string) => void;
 }
 
+function CodeBlock({ code, language }: { code: string; language?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code).catch(() => {
+      const textarea = document.createElement("textarea");
+      textarea.value = code;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    });
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="relative group">
+      <button
+        onClick={handleCopy}
+        className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded bg-zinc-700 text-white text-xs hover:bg-zinc-600"
+        title="Copy code"
+      >
+        {copied ? "✓ Copied" : "Copy"}
+      </button>
+      <pre className="overflow-x-auto rounded-lg bg-zinc-900 p-4 text-sm text-zinc-100">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
 export function ChatMessages({
   messages,
   onConfirm,
@@ -38,6 +70,24 @@ export function ChatMessages({
   // Plugin configuration for ReactMarkdown
   const remarkPlugins = [remarkGfm, remarkMath, remarkBreaks];
   const rehypePlugins = [rehypeKatex, rehypeHighlight];
+
+  const markdownComponents = {
+    code: ({ node, inline, className, children, ...props }: any) => {
+      const match = /language-(\w+)/.exec(className || "");
+      const language = match ? match[1] : "";
+      const code = String(children).replace(/\n$/, "");
+
+      if (inline) {
+        return (
+          <code className="bg-zinc-100 px-1.5 py-0.5 rounded text-sm text-red-600 dark:bg-zinc-800 dark:text-red-400" {...props}>
+            {children}
+          </code>
+        );
+      }
+
+      return <CodeBlock code={code} language={language} />;
+    },
+  };
 
   if (messages.length === 0) {
     return (
@@ -117,6 +167,7 @@ export function ChatMessages({
                           <ReactMarkdown
                             remarkPlugins={remarkPlugins}
                             rehypePlugins={rehypePlugins}
+                            components={markdownComponents}
                           >
                             {part.text}
                           </ReactMarkdown>
@@ -168,6 +219,7 @@ export function ChatMessages({
                       <ReactMarkdown
                         remarkPlugins={remarkPlugins}
                         rehypePlugins={rehypePlugins}
+                        components={markdownComponents}
                       >
                         {message.content}
                       </ReactMarkdown>

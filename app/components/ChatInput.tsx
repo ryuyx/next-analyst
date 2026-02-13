@@ -77,22 +77,32 @@ export function ChatInput({
     if (!fileList) return;
     const MAX_SIZE = 10 * 1024 * 1024;
     const attachments: FileAttachment[] = [];
+    const errors: string[] = [];
 
     for (const file of Array.from(fileList)) {
       if (file.size > MAX_SIZE) {
-        alert(`文件 ${file.name} 超过 10MB 限制`);
+        errors.push(`${file.name}: 超过 10MB 限制`);
         continue;
       }
-      const content = await readFileAsBase64(file);
-      const preview = await readFilePreview(file);
-      attachments.push({
-        id: crypto.randomUUID(),
-        name: file.name,
-        type: file.type || "text/plain",
-        size: file.size,
-        content,
-        preview,
-      });
+      try {
+        const content = await readFileAsBase64(file);
+        const preview = await readFilePreview(file);
+        attachments.push({
+          id: crypto.randomUUID(),
+          name: file.name,
+          type: file.type || "text/plain",
+          size: file.size,
+          content,
+          preview,
+        });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : "读取失败";
+        errors.push(`${file.name}: ${errMsg}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      alert("文件上传出错:\n" + errors.join("\n"));
     }
 
     if (attachments.length > 0) {
@@ -126,14 +136,19 @@ export function ChatInput({
             <div
               key={file.id}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border ${
-                file.isPreviewing
+                file.previewError
+                  ? "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300"
+                  : file.isPreviewing
                   ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
                   : file.richPreview
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
                   : "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300"
               }`}
+              title={file.previewError ? `预览失败: ${file.previewError}` : ""}
             >
-              {file.isPreviewing ? (
+              {file.previewError ? (
+                <span>⚠️</span>
+              ) : file.isPreviewing ? (
                 <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -144,7 +159,9 @@ export function ChatInput({
                 <span>📄</span>
               )}
               <span className="max-w-[150px] truncate">{file.name}</span>
-              {file.isPreviewing ? (
+              {file.previewError ? (
+                <span className="text-red-600 dark:text-red-400 text-xs">预览失败</span>
+              ) : file.isPreviewing ? (
                 <span className="text-amber-600 dark:text-amber-400">解析中...</span>
               ) : file.richPreview ? (
                 <span className="text-emerald-600 dark:text-emerald-400">
@@ -159,6 +176,7 @@ export function ChatInput({
                 type="button"
                 onClick={() => onRemoveFile(file.id)}
                 className="ml-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                aria-label="Remove file"
               >
                 ×
               </button>
@@ -183,7 +201,8 @@ export function ChatInput({
           onClick={() => fileInputRef.current?.click()}
           disabled={isLoading}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-200 text-zinc-400 transition-all hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-500 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-400"
-          title="上传文件"
+          aria-label="Upload file"
+          title="上传文件 (CSV, JSON, Excel, Parquet 等)"
         >
           <svg
             className="h-5 w-5"
@@ -215,6 +234,7 @@ export function ChatInput({
           type="submit"
           disabled={isLoading || isPreviewingFiles || (!input.trim() && pendingFiles.length === 0)}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm transition-all hover:bg-indigo-700 hover:shadow-md disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600"
+          aria-label="Send message"
         >
           {isLoading ? (
             <svg

@@ -84,8 +84,21 @@ function downloadBase64File(base64Data: string, filename: string, mimeType: stri
   URL.revokeObjectURL(url);
 }
 
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text).catch(() => {
+    // Fallback for older browsers
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+  });
+}
+
 export function CodeResultCard({ toolCall, onApprove, onReject }: CodeResultCardProps) {
   const [showCode, setShowCode] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   const { args, result, status } = toolCall;
   const code = (args as { code?: string }).code || "";
@@ -161,12 +174,29 @@ export function CodeResultCard({ toolCall, onApprove, onReject }: CodeResultCard
             </>
           )}
         </div>
-        <button
-          onClick={() => setShowCode(!showCode)}
-          className="text-xs text-zinc-500 hover:text-zinc-700"
-        >
-          {showCode ? "收起代码" : "展开代码"}
-        </button>
+        <div className="flex items-center gap-2">
+          {showCode && code && (
+            <button
+              onClick={() => {
+                copyToClipboard(code);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="text-xs text-zinc-500 hover:text-zinc-700 px-2 py-1 rounded hover:bg-zinc-100"
+              title="Copy code"
+              aria-label="Copy code to clipboard"
+            >
+              {copied ? "✓ 已复制" : "复制"}
+            </button>
+          )}
+          <button
+            onClick={() => setShowCode(!showCode)}
+            className="text-xs text-zinc-500 hover:text-zinc-700"
+            aria-label={showCode ? "Hide code" : "Show code"}
+          >
+            {showCode ? "收起代码" : "展开代码"}
+          </button>
+        </div>
       </div>
 
       {/* Code */}
@@ -341,12 +371,14 @@ export function CodeResultCard({ toolCall, onApprove, onReject }: CodeResultCard
           {/* Error */}
           {error && (
             <div>
-              <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-red-500">
-                错误
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-red-500">
+                  错误
+                </span>
               </div>
-              <pre className="overflow-x-auto rounded-lg bg-red-50 p-2 text-xs text-red-700">
-                {error}
-              </pre>
+              <div className="overflow-x-auto rounded-lg bg-red-50 p-3 text-xs text-red-700 border border-red-200">
+                <pre className="whitespace-pre-wrap break-words font-mono">{error}</pre>
+              </div>
             </div>
           )}
         </div>

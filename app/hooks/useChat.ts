@@ -21,6 +21,7 @@ export interface FileAttachment {
   preview: string;
   richPreview?: FilePreview;
   isPreviewing?: boolean;
+  previewError?: string;
   isGenerated?: boolean;
 }
 
@@ -69,11 +70,12 @@ export function useChat() {
       });
       const data = await response.json();
       if (data.success && data.preview) {
-        return data.preview as FilePreview;
+        return { preview: data.preview as FilePreview, error: undefined };
       }
-      return undefined;
-    } catch {
-      return undefined;
+      return { preview: undefined, error: data.error || "Failed to preview file" };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Preview failed";
+      return { preview: undefined, error: errMsg };
     }
   }, []);
 
@@ -100,7 +102,12 @@ export function useChat() {
         setPendingFiles((prev) =>
           prev.map((f) =>
             f.id === file.id
-              ? { ...f, richPreview: richPreview || undefined, isPreviewing: false }
+              ? {
+                  ...f,
+                  richPreview: richPreview.preview || undefined,
+                  previewError: richPreview.error,
+                  isPreviewing: false
+                }
               : f
           )
         );
