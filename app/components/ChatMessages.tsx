@@ -1,10 +1,13 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, memo, useCallback, useMemo } from "react";
 import type { Message } from "../hooks/useChat";
 import { ConfirmationCard } from "./ConfirmationCard";
 import { ToolCallCard } from "./ToolCallCard";
 import { CodeResultCard } from "./CodeResultCard";
+import { InformationRequestCard } from "./InformationRequestCard";
+import { FilePreviewModal } from "./FilePreviewModal";
+import type { FileAttachment } from "../hooks/useChat";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -21,10 +24,11 @@ interface ChatMessagesProps {
   onSuggestionClick?: (suggestion: string) => void;
 }
 
-function CodeBlock({ code, language }: { code: string; language?: string }) {
+// Memoized CodeBlock component
+const CodeBlock = memo(function CodeBlock({ code, language }: { code: string; language?: string }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code).catch(() => {
       const textarea = document.createElement("textarea");
       textarea.value = code;
@@ -35,7 +39,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
     });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, [code]);
 
   return (
     <div className="relative group my-2 not-prose">
@@ -51,9 +55,9 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
       </div>
     </div>
   );
-}
+});
 
-export function ChatMessages({
+export const ChatMessages = memo(function ChatMessages({
   messages,
   onConfirm,
   onReject,
@@ -64,14 +68,15 @@ export function ChatMessages({
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [previewingFile, setPreviewingFile] = useState<FileAttachment | null>(null);
 
   // Check if user is near bottom
-  const isNearBottom = () => {
+  const isNearBottom = useCallback(() => {
     if (!containerRef.current) return true;
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
     // Consider "near bottom" if within 100px of the bottom
     return scrollHeight - scrollTop - clientHeight < 100;
-  };
+  }, []);
 
   // Auto-scroll to bottom when messages change, but only if user is near bottom
   useEffect(() => {
@@ -81,19 +86,19 @@ export function ChatMessages({
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [messages, shouldAutoScroll]);
+  }, [messages, shouldAutoScroll, isNearBottom]);
 
   // Detect user scrolling away from bottom
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     const nearBottom = isNearBottom();
     setShouldAutoScroll(nearBottom);
-  };
+  }, [isNearBottom]);
 
-  // Plugin configuration for ReactMarkdown
-  const remarkPlugins = [remarkGfm, remarkMath, remarkBreaks];
-  const rehypePlugins = [rehypeKatex, rehypeHighlight];
+  // Plugin configuration for ReactMarkdown - memoized to prevent recreation
+  const remarkPlugins = useMemo(() => [remarkGfm, remarkMath, remarkBreaks], []);
+  const rehypePlugins = useMemo(() => [rehypeKatex, rehypeHighlight], []);
 
-  const markdownComponents = {
+  const markdownComponents = useMemo(() => ({
     code: ({ node, inline, className, children, ...props }: any) => {
       const match = /language-(\w+)/.exec(className || "");
       const language = match ? match[1] : "";
@@ -110,7 +115,7 @@ export function ChatMessages({
 
       return <CodeBlock code={code} language={language} />;
     },
-  };
+  }), []);
 
   if (messages.length === 0) {
     return (
@@ -145,6 +150,14 @@ export function ChatMessages({
       style={{ scrollbarGutter: "stable" }}
       onScroll={handleScroll}
     >
+      {/* File Preview Modal */}
+      {previewingFile && (
+        <FilePreviewModal
+          file={previewingFile}
+          onClose={() => setPreviewingFile(null)}
+        />
+      )}
+
       <div className="mx-auto max-w-3xl space-y-6">
         {messages.map((message) => (
           <div
@@ -166,11 +179,13 @@ export function ChatMessages({
                   {message.files.map((file) => (
                     <div
                       key={file.id}
-                      className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${
+                      onClick={() => setPreviewingFile(file)}
+                      className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium cursor-pointer transition-all hover:shadow-md ${
                         message.role === "user"
-                          ? "bg-white/20 text-white"
-                          : "bg-zinc-100 text-zinc-600"
+                          ? "bg-white/20 text-white hover:bg-white/30"
+                          : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
                       }`}
+                      title="点击查看详细预览"
                     >
                       <span>📄</span>
                       <span>{file.name}</span>
@@ -205,7 +220,7 @@ export function ChatMessages({
                     if (part.type === "tool_call" && part.toolCall) {
                       const tc = part.toolCall;
                       const currentIndex = toolCallIndex++;
-                      
+
                       if (tc.tool === "confirm_action") {
                         return (
                           <ConfirmationCard
@@ -213,6 +228,14 @@ export function ChatMessages({
                             toolCall={tc}
                             onConfirm={onConfirm}
                             onReject={onReject}
+                          />
+                        );
+                      }
+                      if (tc.tool === "ask_for_information") {
+                        return (
+                          <InformationRequestCard
+                            key={index}
+                            toolCall={tc}
                           />
                         );
                       }
@@ -263,6 +286,11 @@ export function ChatMessages({
                         onConfirm={onConfirm}
                         onReject={onReject}
                       />
+                    ) : tc.tool === "ask_for_information" ? (
+                      <InformationRequestCard
+                        key={i}
+                        toolCall={tc}
+                      />
                     ) : tc.tool === "execute_python" ? (
                       <CodeResultCard
                         key={i}
@@ -292,4 +320,4 @@ export function ChatMessages({
       </div>
     </div>
   );
-}
+});

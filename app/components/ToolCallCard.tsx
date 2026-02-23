@@ -9,8 +9,8 @@ interface ToolCallCardProps {
 export function ToolCallCard({ toolCall }: ToolCallCardProps) {
   const { tool, args, result } = toolCall;
 
-  if (tool === "confirm_action") {
-    return null; // Handled by ConfirmationCard
+  if (tool === "confirm_action" || tool === "ask_for_information") {
+    return null; // Handled by dedicated cards
   }
 
   return (

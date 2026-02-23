@@ -228,50 +228,43 @@ export function useChat() {
 
               if (data.type === "text_delta") {
                 accContent += data.content;
-                
-                let updatedParts = [...accParts];
-                if (updatedParts.length > 0 && updatedParts[updatedParts.length - 1].type === "text") {
-                   const lastPart = updatedParts[updatedParts.length - 1];
-                   updatedParts[updatedParts.length - 1] = { 
-                     ...lastPart, 
-                     text: (lastPart.text || "") + data.content 
-                   };
-                   // Update local accumulator reference to point to new object
-                   accParts[accParts.length - 1] = updatedParts[updatedParts.length - 1];
-                } else {
-                  const newPart: MessagePart = { type: "text", text: data.content };
-                  accParts.push(newPart);
-                  updatedParts = [...accParts];
-                }
 
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMessage.id 
-                      ? { ...m, content: accContent, parts: updatedParts }
-                      : m
-                  )
-                );
-              } else if (data.type === "text") {
-                accContent += data.content;
-                
-                let updatedParts = [...accParts];
-                if (updatedParts.length > 0 && updatedParts[updatedParts.length - 1].type === "text") {
-                   const lastPart = updatedParts[updatedParts.length - 1];
-                   updatedParts[updatedParts.length - 1] = { 
-                     ...lastPart, 
-                     text: (lastPart.text || "") + data.content 
+                // Directly update accParts - single source of truth
+                if (accParts.length > 0 && accParts[accParts.length - 1].type === "text") {
+                   const lastPart = accParts[accParts.length - 1];
+                   accParts[accParts.length - 1] = {
+                     type: "text",
+                     text: (lastPart.text || "") + data.content
                    };
-                   accParts[accParts.length - 1] = updatedParts[updatedParts.length - 1];
                 } else {
-                  const newPart: MessagePart = { type: "text", text: data.content };
-                  accParts.push(newPart);
-                  updatedParts = [...accParts];
+                  accParts.push({ type: "text", text: data.content });
                 }
 
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantMessage.id
-                      ? { ...m, content: accContent, parts: updatedParts }
+                      ? { ...m, content: accContent, parts: [...accParts] }
+                      : m
+                  )
+                );
+              } else if (data.type === "text") {
+                accContent += data.content;
+
+                // Directly update accParts - single source of truth
+                if (accParts.length > 0 && accParts[accParts.length - 1].type === "text") {
+                   const lastPart = accParts[accParts.length - 1];
+                   accParts[accParts.length - 1] = {
+                     type: "text",
+                     text: (lastPart.text || "") + data.content
+                   };
+                } else {
+                  accParts.push({ type: "text", text: data.content });
+                }
+
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMessage.id
+                      ? { ...m, content: accContent, parts: [...accParts] }
                       : m
                   )
                 );
@@ -486,12 +479,15 @@ export function useChat() {
       // --- Follow-up: Send tool result to AI for analysis ---
       if (!executionResult) return;
 
-      // Set streaming state on the same assistant message
-      setMessages((prev) =>
-        prev.map((m) =>
+      // Get the latest message state to avoid stale closure
+      setMessages((prev) => {
+        const currentMsg = prev.find((m) => m.id === messageId);
+        if (!currentMsg) return prev;
+
+        return prev.map((m) =>
           m.id === messageId ? { ...m, isStreaming: true } : m
-        )
-      );
+        );
+      });
       setIsLoading(true);
 
       try {
@@ -543,34 +539,20 @@ export function useChat() {
         if (!reader) throw new Error("No reader");
 
         const decoder = new TextDecoder();
+
+        // Initialize accumulators from current message state
         let accContent = msg?.content || "";
         if (accContent) accContent += "\n\n";
-        
-        // Initialize tool calls and parts array from current message state
-        // Note: msg.toolCalls and msg.parts should be up to date from previous setMessages calls
-        // We need local accumulators because state updates are async and we are in a loop
-        // However, since we are re-reading msg from closure (captured at start of this function?), 
-        // wait, `msg` is `messages.find(...)`. `messages` is a dependency of `approveToolCall`.
-        // But `approveToolCall` is called once. `messages` value is fixed to when the function was created/called?
-        // No, `approveToolCall` depends on `[messages]`. So it is recreated when messages change.
-        // But inside `approveToolCall`, we have `const msg = messages.find(...)`.
-        // This `msg` is the stale snapshot from when execution started.
-        
-        // We need to be careful. We just called `setMessages` multiple times before this block.
-        // But we don't have the updated `msg` object here.
-        // `msg` refers to the message BEFORE execution result was set in `toolCalls`.
-        
-        // Correction: We need to manually construct the starting state for `accParts` and `accToolCalls`
-        // based on what we just did (updated the tool call result).
-        
-        const updatedToolCalls = msg?.toolCalls?.map((t, i) =>
+
+        // Build initial state from the updated tool call result
+        const initialToolCalls = msg?.toolCalls?.map((t, i) =>
              i === toolCallIndex
                ? { ...t, status: "completed" as const, result: executionResult as ToolCall["result"] }
                : t
         ) || [];
 
         let toolCallCounter = 0;
-        const updatedParts = msg?.parts?.map(part => {
+        const initialParts = msg?.parts?.map(part => {
              if (part.type === 'tool_call' && part.toolCall) {
                 if (toolCallCounter === toolCallIndex) {
                    toolCallCounter++;
@@ -580,9 +562,9 @@ export function useChat() {
              }
              return part;
         }) || [];
-        
-        const accToolCalls = [...updatedToolCalls];
-        const accParts = [...updatedParts];
+
+        const accToolCalls = [...initialToolCalls];
+        const accParts = [...initialParts];
 
         while (true) {
           const { done, value } = await reader.read();
@@ -601,13 +583,13 @@ export function useChat() {
 
               if (data.type === "text_delta" || data.type === "text") {
                 accContent += data.content;
-                
-                // Update parts
+
+                // Directly update accParts - single source of truth
                 if (accParts.length > 0 && accParts[accParts.length - 1].type === "text") {
                    const lastPart = accParts[accParts.length - 1];
-                   accParts[accParts.length - 1] = { 
-                     ...lastPart, 
-                     text: (lastPart.text || "") + data.content 
+                   accParts[accParts.length - 1] = {
+                     type: "text",
+                     text: (lastPart.text || "") + data.content
                    };
                 } else {
                   accParts.push({ type: "text", text: data.content });

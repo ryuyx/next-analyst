@@ -81,6 +81,27 @@ export async function POST(req: Request) {
       }
     }
 
+    // Configure matplotlib to support Chinese fonts
+    const fontSetupCode = `
+import matplotlib.pyplot as plt
+import matplotlib
+# Try common Chinese fonts in order of preference
+_chinese_fonts = ['SimHei', 'Microsoft YaHei', 'WenQuanYi Micro Hei', 'Noto Sans CJK SC', 'DejaVu Sans']
+_font_set = False
+for _font in _chinese_fonts:
+    try:
+        matplotlib.rcParams['font.sans-serif'] = [_font] + matplotlib.rcParams['font.sans-serif']
+        _font_set = True
+        break
+    except:
+        pass
+if not _font_set:
+    matplotlib.rcParams['font.sans-serif'] = ['DejaVu Sans']
+matplotlib.rcParams['axes.unicode_minus'] = False  # Fix minus sign display
+del _chinese_fonts, _font_set, _font
+`;
+    await sandbox.runCode(fontSetupCode);
+
     const execution = await sandbox.runCode(code);
 
     const stdout = execution.logs.stdout.join("\n");

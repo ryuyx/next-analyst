@@ -3,6 +3,7 @@
 import { useState } from "react";
 import sampleQuestions from "@/data/sample-questions.json";
 import type { FileAttachment } from "../hooks/useChat";
+import { generateUUID } from "../lib/uuid";
 
 interface SampleQuestion {
   id: string;
@@ -50,7 +51,7 @@ export function SampleQuestions({ onQuestionSelect }: SampleQuestionsProps) {
             const preview = lines.join("\n");
             
             const attachment: FileAttachment = {
-              id: crypto.randomUUID(),
+              id: generateUUID(),
               name: filename,
               type: file.type || "text/csv",
               size: file.size,

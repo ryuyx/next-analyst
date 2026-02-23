@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect, type FormEvent } from "react";
+import { useState, useRef, useEffect, useCallback, memo, forwardRef, useImperativeHandle, type FormEvent } from "react";
 import type { FileAttachment } from "../hooks/useChat";
+import { generateUUID } from "../lib/uuid";
+import { FilePreviewModal } from "./FilePreviewModal";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -46,22 +48,32 @@ interface ChatInputProps {
   pendingFiles: FileAttachment[];
   onAddFiles: (files: FileAttachment[]) => void;
   onRemoveFile: (id: string) => void;
-  input: string;
-  onInputChange: (value: string) => void;
 }
 
-export function ChatInput({
+export interface ChatInputHandle {
+  setInputValue: (value: string) => void;
+}
+
+const ChatInputInner = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInputInner({
   onSend,
   isLoading,
   isPreviewingFiles,
   pendingFiles,
   onAddFiles,
   onRemoveFile,
-  input,
-  onInputChange,
-}: ChatInputProps) {
+}, ref) {
+  // 将 input 状态移到组件内部，避免每次输入触发父组件重渲染
+  const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewingFile, setPreviewingFile] = useState<FileAttachment | null>(null);
+
+  // 暴露设置输入值的方法给父组件
+  useImperativeHandle(ref, () => ({
+    setInputValue: (value: string) => {
+      setInput(value);
+    }
+  }), []);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -73,7 +85,7 @@ export function ChatInput({
     }
   }, [input]);
 
-  const handleFileSelect = async (
+  const handleFileSelect = useCallback(async (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const fileList = e.target.files;
@@ -91,7 +103,7 @@ export function ChatInput({
         const content = await readFileAsBase64(file);
         const preview = await readFilePreview(file);
         attachments.push({
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           name: file.name,
           type: file.type || "text/plain",
           size: file.size,
@@ -112,42 +124,51 @@ export function ChatInput({
       onAddFiles(attachments);
     }
     e.target.value = "";
-  };
+  }, [onAddFiles]);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = useCallback((e: FormEvent) => {
     e.preventDefault();
     const hasFiles = pendingFiles.length > 0;
     const anyPreviewing = pendingFiles.some((f) => f.isPreviewing);
     if ((!input.trim() && !hasFiles) || isLoading || anyPreviewing) return;
     onSend(input.trim() || "请分析上传的文件");
-    onInputChange("");
-  };
+    setInput("");
+  }, [input, pendingFiles, isLoading, onSend]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
+      handleSubmit(e as unknown as FormEvent);
     }
-  };
+  }, [handleSubmit]);
 
   return (
     <div className="border-t border-zinc-200 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900">
+      {/* File Preview Modal */}
+      {previewingFile && (
+        <FilePreviewModal
+          file={previewingFile}
+          onClose={() => setPreviewingFile(null)}
+        />
+      )}
+
       {/* File chips */}
       {pendingFiles.length > 0 && (
         <div className="mx-auto mb-2 flex max-w-3xl flex-wrap gap-2">
           {pendingFiles.map((file) => (
             <div
               key={file.id}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border ${
+              onClick={() => setPreviewingFile(file)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border cursor-pointer transition-all hover:shadow-md ${
                 file.previewError
-                  ? "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300"
+                  ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
                   : file.isPreviewing
-                  ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                  ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50"
                   : file.richPreview
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                  : "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50"
+                  : "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
               }`}
-              title={file.previewError ? `预览失败: ${file.previewError}` : ""}
+              title={file.previewError ? `预览失败: ${file.previewError}` : "点击查看详细预览"}
             >
               {file.previewError ? (
                 <span>⚠️</span>
@@ -177,7 +198,10 @@ export function ChatInput({
               )}
               <button
                 type="button"
-                onClick={() => onRemoveFile(file.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveFile(file.id);
+                }}
                 className="ml-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
                 aria-label="Remove file"
               >
@@ -225,7 +249,7 @@ export function ChatInput({
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => onInputChange(e.target.value)}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="输入消息... (Shift+Enter 换行)"
             rows={1}
@@ -281,4 +305,6 @@ export function ChatInput({
       </p>
     </div>
   );
-}
+});
+
+export const ChatInput = memo(ChatInputInner);
