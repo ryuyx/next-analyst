@@ -26,9 +26,25 @@ export interface FileAttachment {
 }
 
 export interface MessagePart {
-  type: "text" | "tool_call";
+  type: "text" | "tool_call" | "plan";
   text?: string;
   toolCall?: ToolCall;
+  plan?: Plan;
+}
+
+export interface Plan {
+  id: string;
+  steps: PlanStep[];
+  currentStepIndex: number;
+  isComplete: boolean;
+}
+
+export interface PlanStep {
+  id: string;
+  title: string;
+  description?: string;
+  status: "pending" | "in_progress" | "completed" | "failed";
+  result?: string;
 }
 
 export interface Message {
@@ -38,6 +54,7 @@ export interface Message {
   files?: FileAttachment[];
   toolCalls?: ToolCall[];
   parts?: MessagePart[];
+  plan?: Plan;
   isStreaming?: boolean;
 }
 
@@ -48,6 +65,11 @@ export interface ToolCall {
   result?: {
     type: string;
     [key: string]: unknown;
+  };
+  // Plan context for HITL continuation
+  planContext?: {
+    plan: Plan;
+    currentStepIndex: number;
   };
 }
 
@@ -292,6 +314,7 @@ export function useChat() {
                   tool: data.tool,
                   args: data.args,
                   status: "pending",
+                  planContext: data.planContext,
                 };
                 accToolCalls.push(newToolCall);
                  const newPart: MessagePart = { type: "tool_call", toolCall: newToolCall };
@@ -304,6 +327,45 @@ export function useChat() {
                       : m
                   )
                 );
+              } else if (data.type === "plan_created") {
+                // Plan created by agent
+                const plan = data.plan as Plan;
+                const newPart: MessagePart = { type: "plan", plan };
+                accParts.push(newPart);
+
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMessage.id
+                      ? { ...m, plan, parts: [...accParts] }
+                      : m
+                  )
+                );
+              } else if (data.type === "plan_step_update") {
+                // Update plan step status - find the message with the plan
+                const { stepIndex, status } = data as { stepIndex: number; status: string };
+                setMessages((prev) => {
+                  // Find the message that has a plan (could be current or previous message)
+                  const planMsgIndex = prev.findIndex((m) => m.plan != null);
+                  if (planMsgIndex === -1) return prev;
+
+                  return prev.map((m, idx) => {
+                    if (idx !== planMsgIndex || !m.plan) return m;
+                    const updatedSteps = m.plan.steps.map((step, i) =>
+                      i === stepIndex ? { ...step, status: status as PlanStep["status"] } : step
+                    );
+                    const completedCount = updatedSteps.filter((s) => s.status === "completed").length;
+                    const updatedPlan = {
+                      ...m.plan,
+                      steps: updatedSteps,
+                      currentStepIndex: stepIndex,
+                      isComplete: completedCount === updatedSteps.length,
+                    };
+                    const updatedParts = m.parts?.map((p) =>
+                      p.type === "plan" ? { ...p, plan: updatedPlan } : p
+                    );
+                    return { ...m, plan: updatedPlan, parts: updatedParts };
+                  });
+                });
               } else if (data.type === "error") {
                 accContent += data.content;
                 setMessages((prev) =>
@@ -530,6 +592,9 @@ export function useChat() {
             messages: conversationHistory,
             toolResult: executionResult,
             sessionFiles: sessionFilesContext,
+            // Pass plan context for automatic step status updates
+            plan: tc.planContext?.plan,
+            currentStepIndex: tc.planContext?.currentStepIndex,
           }),
         });
 
@@ -626,6 +691,7 @@ export function useChat() {
                    tool: data.tool,
                    args: data.args,
                    status: "pending",
+                   planContext: data.planContext,
                 };
                 accToolCalls.push(newToolCall);
                 accParts.push({ type: "tool_call", toolCall: newToolCall });
@@ -641,6 +707,43 @@ export function useChat() {
                       : m
                   )
                 );
+              } else if (data.type === "plan_created") {
+                // Plan created by agent during follow-up
+                const plan = data.plan as Plan;
+                accParts.push({ type: "plan", plan });
+
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === messageId
+                      ? { ...m, plan, parts: [...accParts] }
+                      : m
+                  )
+                );
+              } else if (data.type === "plan_step_update") {
+                // Update plan step status during follow-up - find the message with the plan
+                const { stepIndex, status } = data as { stepIndex: number; status: string };
+                setMessages((prev) => {
+                  const planMsgIndex = prev.findIndex((m) => m.plan != null);
+                  if (planMsgIndex === -1) return prev;
+
+                  return prev.map((m, idx) => {
+                    if (idx !== planMsgIndex || !m.plan) return m;
+                    const updatedSteps = m.plan.steps.map((step, i) =>
+                      i === stepIndex ? { ...step, status: status as PlanStep["status"] } : step
+                    );
+                    const completedCount = updatedSteps.filter((s) => s.status === "completed").length;
+                    const updatedPlan = {
+                      ...m.plan,
+                      steps: updatedSteps,
+                      currentStepIndex: stepIndex,
+                      isComplete: completedCount === updatedSteps.length,
+                    };
+                    const updatedParts = m.parts?.map((p) =>
+                      p.type === "plan" ? { ...p, plan: updatedPlan } : p
+                    );
+                    return { ...m, plan: updatedPlan, parts: updatedParts };
+                  });
+                });
               } else if (data.type === "done") {
                 setMessages((prev) =>
                   prev.map((m) =>

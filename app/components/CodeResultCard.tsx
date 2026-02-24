@@ -202,11 +202,14 @@ function FilePreview({ file }: { file: GeneratedFile }) {
 }
 
 export function CodeResultCard({ toolCall, onApprove, onReject }: CodeResultCardProps) {
-  const [showCode, setShowCode] = useState(true);
+  const { args, result, status } = toolCall;
+
+  // Show code by default, but collapse if already completed (e.g., on page reload)
+  // The parent component should use a key based on status to trigger re-mount when status changes
+  const [showCode, setShowCode] = useState(status !== "completed");
   const [copied, setCopied] = useState(false);
   const [expandedFileIndex, setExpandedFileIndex] = useState<number | null>(null);
 
-  const { args, result, status } = toolCall;
   const code = (args as { code?: string }).code || "";
   const stdout = (result as { stdout?: string })?.stdout || "";
   const stderr = (result as { stderr?: string })?.stderr || "";

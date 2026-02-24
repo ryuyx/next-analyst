@@ -7,6 +7,7 @@ import { ToolCallCard } from "./ToolCallCard";
 import { CodeResultCard } from "./CodeResultCard";
 import { InformationRequestCard } from "./InformationRequestCard";
 import { FilePreviewModal } from "./FilePreviewModal";
+import { PlanCard } from "./PlanCard";
 import type { FileAttachment } from "../hooks/useChat";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -242,7 +243,7 @@ export const ChatMessages = memo(function ChatMessages({
                       if (tc.tool === "execute_python") {
                         return (
                           <CodeResultCard
-                            key={index}
+                            key={`${index}-${tc.status}`}
                             toolCall={tc}
                             onApprove={() =>
                               onApproveToolCall(message.id, currentIndex)
@@ -254,6 +255,9 @@ export const ChatMessages = memo(function ChatMessages({
                         );
                       }
                       return <ToolCallCard key={index} toolCall={tc} />;
+                    }
+                    if (part.type === "plan" && part.plan) {
+                      return <PlanCard key={index} plan={part.plan} />;
                     }
                     return null;
                   });
@@ -293,7 +297,7 @@ export const ChatMessages = memo(function ChatMessages({
                       />
                     ) : tc.tool === "execute_python" ? (
                       <CodeResultCard
-                        key={i}
+                        key={`${i}-${tc.status}`}
                         toolCall={tc}
                         onApprove={() => onApproveToolCall(message.id, i)}
                         onReject={() => onRejectToolCall(message.id, i)}

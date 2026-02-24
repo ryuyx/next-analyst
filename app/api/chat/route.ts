@@ -1,5 +1,5 @@
 ﻿import { AIMessage } from "@langchain/core/messages";
-import { createGraph, buildLangChainMessages, type FileInfo } from "./agent";
+import { createGraph, buildLangChainMessages, type FileInfo, type Plan } from "./agent";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -107,33 +107,80 @@ export async function POST(req: Request) {
     sessionFiles as FileInfo[] | undefined
   );
 
+  // Extract plan info from request if continuing after HITL
+  const currentPlan = (body as Record<string, unknown>).plan as Plan | undefined;
+  const currentStepIndex = (body as Record<string, unknown>).currentStepIndex as number | undefined;
+
   const encoder = new TextEncoder();
+
+  // Track plan state during streaming
+  let activePlan: Plan | null = currentPlan || null;
+  let activeStepIndex: number = currentStepIndex ?? 0;
+
+  // Track accumulated content to detect and handle non-delta streaming
+  let accumulatedContent = "";
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
+        // If continuing after HITL execution with a plan, mark current step as completed
+        if (toolResult && activePlan && activeStepIndex < activePlan.steps.length) {
+          const hasError = !!(toolResult as Record<string, unknown>).error;
+          const status = hasError ? "failed" : "completed";
+
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "plan_step_update",
+                stepIndex: activeStepIndex,
+                status,
+              })}\n\n`
+            )
+          );
+
+          // Move to next step
+          activeStepIndex++;
+        }
+
         const eventStream = graph.streamEvents(
-          { messages: langchainMessages },
+          { messages: langchainMessages, plan: activePlan, currentStepIndex: activeStepIndex },
           { version: "v2", recursionLimit: 25 }
         );
 
         for await (const event of eventStream) {
+          // -- LLM starting a new generation (reset accumulated content) --
+          if (event.event === "on_chat_model_start") {
+            accumulatedContent = "";
+          }
+
           // -- Token-level streaming from the LLM --
-          if (event.event === "on_chat_model_stream") {
+          else if (event.event === "on_chat_model_stream") {
             const chunk = event.data?.chunk;
             if (
               chunk?.content &&
               typeof chunk.content === "string" &&
               chunk.content.length > 0
             ) {
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({
-                    type: "text_delta",
-                    content: chunk.content,
-                  })}\n\n`
-                )
-              );
+              let deltaContent = chunk.content;
+
+              // Detect if the chunk is cumulative (contains previous content)
+              // This handles models that return accumulated content instead of deltas
+              if (accumulatedContent.length > 0 && deltaContent.startsWith(accumulatedContent)) {
+                // Extract only the new content
+                deltaContent = deltaContent.slice(accumulatedContent.length);
+              }
+
+              if (deltaContent.length > 0) {
+                accumulatedContent += deltaContent;
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({
+                      type: "text_delta",
+                      content: deltaContent,
+                    })}\n\n`
+                  )
+                );
+              }
             }
           }
 
@@ -147,12 +194,30 @@ export async function POST(req: Request) {
             if (aiMsg?.tool_calls?.length) {
               for (const tc of aiMsg.tool_calls) {
                 if (tc.name === "execute_python") {
+                  // If we have a plan, mark current step as in_progress
+                  if (activePlan && activeStepIndex < activePlan.steps.length) {
+                    controller.enqueue(
+                      encoder.encode(
+                        `data: ${JSON.stringify({
+                          type: "plan_step_update",
+                          stepIndex: activeStepIndex,
+                          status: "in_progress",
+                        })}\n\n`
+                      )
+                    );
+                  }
+
                   controller.enqueue(
                     encoder.encode(
                       `data: ${JSON.stringify({
                         type: "pending_tool_call",
                         tool: tc.name,
                         args: tc.args,
+                        // Include plan context for HITL continuation
+                        planContext: activePlan ? {
+                          plan: activePlan,
+                          currentStepIndex: activeStepIndex,
+                        } : undefined,
                       })}\n\n`
                     )
                   );
@@ -170,26 +235,51 @@ export async function POST(req: Request) {
             const toolInput = event.data?.input;
 
             let result: unknown;
+            // toolOutput could be a string or a ToolMessage with content property
+            let outputStr: string | undefined;
             if (typeof toolOutput === "string") {
+              outputStr = toolOutput;
+            } else if (toolOutput && typeof toolOutput === "object" && "content" in toolOutput) {
+              // ToolMessage object - extract content
+              outputStr = String((toolOutput as { content: unknown }).content);
+            }
+
+            if (outputStr) {
               try {
-                result = JSON.parse(toolOutput);
+                result = JSON.parse(outputStr);
               } catch {
-                result = { text: toolOutput };
+                result = { text: outputStr };
               }
             } else {
               result = toolOutput ?? { text: "" };
             }
 
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({
-                  type: "tool_call",
-                  tool: toolName,
-                  args: toolInput ?? {},
-                  result,
-                })}\n\n`
-              )
-            );
+            // Special handling for create_plan tool - emit plan_created event and track plan
+            if (toolName === "create_plan" && result && typeof result === "object" && "type" in result && (result as { type: string }).type === "plan_created") {
+              const planResult = result as { type: string; plan: Plan };
+              activePlan = planResult.plan;
+              activeStepIndex = 0;
+
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "plan_created",
+                    plan: planResult.plan,
+                  })}\n\n`
+                )
+              );
+            } else {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "tool_call",
+                    tool: toolName,
+                    args: toolInput ?? {},
+                    result,
+                  })}\n\n`
+                )
+              );
+            }
           }
         }
 
